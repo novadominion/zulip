@@ -4,9 +4,9 @@ services:
   postgres:
     image: postgres:14-alpine
     environment:
-      POSTGRES_USER: zulip
-      POSTGRES_PASSWORD: zulippass
-      POSTGRES_DB: zulip
+      POSTGRES_USER: ${POSTGRES_USER:-zulip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-zulip}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -33,8 +33,8 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-alpine
     environment:
-      RABBITMQ_DEFAULT_USER: zulip
-      RABBITMQ_DEFAULT_PASS: zulippass
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-zulip}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -71,19 +71,19 @@ services:
     environment:
       # Django settings
       DJANGO_SETTINGS_MODULE: zproject.settings
-      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here-change-in-production}
+      SECRET_KEY: ${SECRET_KEY}
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-zulip.novadominion.com,localhost,127.0.0.1}
       
       # Database settings
-      DATABASE_URL: postgresql://zulip:zulippass@postgres:5432/zulip
+      DATABASE_URL: postgresql://${POSTGRES_USER:-zulip}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zulip}
       
       # Cache and queue settings
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: zulip
-      RABBITMQ_PASSWORD: zulippass
+      RABBITMQ_USER: ${RABBITMQ_USER:-zulip}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       MEMCACHED_LOCATION: memcached:11211
       
       # Zulip specific settings
