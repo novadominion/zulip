@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: zulip
+      POSTGRES_PASSWORD: zulippass
+      POSTGRES_DB: zulip
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - zulip_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zulip"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - zulip_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: zulip
+      RABBITMQ_DEFAULT_PASS: zulippass
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - zulip_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  memcached:
+    image: memcached:1.6-alpine
+    networks:
+      - zulip_network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "11211"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zulip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      memcached:
+        condition: service_healthy
+    environment:
+      # Django settings
+      DJANGO_SETTINGS_MODULE: zproject.settings
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-here-change-in-production}
+      DEBUG: ${DEBUG:-False}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-zulip.novadominion.com,localhost,127.0.0.1}
+      
+      # Database settings
+      DATABASE_URL: postgresql://zulip:zulippass@postgres:5432/zulip
+      
+      # Cache and queue settings
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: zulip
+      RABBITMQ_PASSWORD: zulippass
+      MEMCACHED_LOCATION: memcached:11211
+      
+      # Zulip specific settings
+      EXTERNAL_HOST: ${EXTERNAL_HOST:-zulip.novadominion.com}
+      ZULIP_ADMINISTRATOR: ${ZULIP_ADMINISTRATOR:-admin@zulip.novadominion.com}
+      EMAIL_HOST: ${EMAIL_HOST:-localhost}
+      EMAIL_PORT: ${EMAIL_PORT:-25}
+      
+      # Deployment settings
+      SETTING_PRODUCTION: "True"
+      SETTING_TORNADO_PROCESSES: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - zulip_data:/home/zulip/uploads
+      - ./:/srv/zulip
+    networks:
+      - zulip_network
+    command: |
+      bash -c "
+        python manage.py migrate --noinput &&
+        python manage.py collectstatic --noinput &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+networks:
+  zulip_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  zulip_data:
